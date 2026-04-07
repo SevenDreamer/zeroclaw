@@ -276,9 +276,11 @@ impl WhatsAppChannel {
                         channel: "whatsapp".to_string(),
                         timestamp,
                         thread_ts: None,
-                        interruption_scope_id: None,
+                parent_id: None,
+                interruption_scope_id: None,
                         attachments: vec![],
-                    });
+                                    bot_id: None,
+            });
                 }
             }
         }

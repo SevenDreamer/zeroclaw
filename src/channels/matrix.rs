@@ -1188,7 +1188,8 @@ impl Channel for MatrixChannel {
                     thread_ts: thread_ts.clone(),
                     interruption_scope_id: thread_ts,
                     attachments: vec![],
-                };
+                                bot_id: None,
+            };
 
                 let _ = tx.send(msg).await;
             }

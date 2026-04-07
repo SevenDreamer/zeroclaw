@@ -13,6 +13,10 @@ pub struct ChannelMessage {
     /// Platform thread identifier (e.g. Slack `ts`, Discord thread ID).
     /// When set, replies should be posted as threaded responses.
     pub thread_ts: Option<String>,
+    /// Parent message ID (the message being replied to/quoted).
+    /// Set when this message is a reply to another message.
+    /// For Feishu/Lark, this is the `parent_id` from the event.
+    pub parent_id: Option<String>,
     /// Thread scope identifier for interruption/cancellation grouping.
     /// Distinct from `thread_ts` (reply anchor): this is `Some` only when the message
     /// is genuinely inside a reply thread and should be isolated from other threads.
@@ -22,6 +26,8 @@ pub struct ChannelMessage {
     /// Channels populate this when they receive media alongside a text message.
     /// Defaults to empty — existing channels are unaffected.
     pub attachments: Vec<super::media_pipeline::MediaAttachment>,
+    /// Bot identifier for session isolation in multi-bot group chats.
+    pub bot_id: Option<String>,
 }
 
 /// Message to send through a channel
@@ -32,6 +38,12 @@ pub struct SendMessage {
     pub subject: Option<String>,
     /// Platform thread identifier for threaded replies (e.g. Slack `thread_ts`).
     pub thread_ts: Option<String>,
+    /// Message ID to reply to (quote/inline reply).
+    /// When set, the message should be sent as a reply to the specified message.
+    /// For Feishu/Lark, this triggers the `/messages/{id}/reply` endpoint.
+    pub reply_to_message_id: Option<String>,
+    /// Whether to create a new thread when replying (for Feishu/Lark `reply_in_thread`).
+    pub reply_in_thread: bool,
     /// Optional cancellation token for interruptible delivery (e.g. multi-message mode).
     pub cancellation_token: Option<CancellationToken>,
     /// File attachments to send with the message.
@@ -47,6 +59,8 @@ impl SendMessage {
             recipient: recipient.into(),
             subject: None,
             thread_ts: None,
+            reply_to_message_id: None,
+            reply_in_thread: false,
             cancellation_token: None,
             attachments: vec![],
         }
@@ -63,6 +77,8 @@ impl SendMessage {
             recipient: recipient.into(),
             subject: Some(subject.into()),
             thread_ts: None,
+            reply_to_message_id: None,
+            reply_in_thread: false,
             cancellation_token: None,
             attachments: vec![],
         }
@@ -71,6 +87,18 @@ impl SendMessage {
     /// Set the thread identifier for threaded replies.
     pub fn in_thread(mut self, thread_ts: Option<String>) -> Self {
         self.thread_ts = thread_ts;
+        self
+    }
+
+    /// Set the message ID to reply to (quote/inline reply).
+    pub fn reply_to(mut self, message_id: Option<String>) -> Self {
+        self.reply_to_message_id = message_id;
+        self
+    }
+
+    /// Set whether to create a new thread when replying.
+    pub fn with_thread_reply(mut self, reply_in_thread: bool) -> Self {
+        self.reply_in_thread = reply_in_thread;
         self
     }
 
@@ -255,6 +283,7 @@ mod tests {
                 channel: "dummy".into(),
                 timestamp: 123,
                 thread_ts: None,
+                parent_id: None,
                 interruption_scope_id: None,
                 attachments: vec![],
             })
@@ -273,6 +302,7 @@ mod tests {
             channel: "dummy".into(),
             timestamp: 999,
             thread_ts: None,
+            parent_id: None,
             interruption_scope_id: None,
             attachments: vec![],
         };

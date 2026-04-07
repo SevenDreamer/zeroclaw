@@ -294,9 +294,11 @@ end tell"#
                                 .unwrap_or_default()
                                 .as_secs(),
                             thread_ts: None,
+                parent_id: None,
                             interruption_scope_id: None,
                             attachments: vec![],
-                        };
+                                        bot_id: None,
+            };
 
                         if tx.send(msg).await.is_err() {
                             return Ok(());

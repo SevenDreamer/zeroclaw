@@ -210,9 +210,11 @@ impl WatiChannel {
             channel: "wati".to_string(),
             timestamp,
             thread_ts: None,
-            interruption_scope_id: None,
+                parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        });
+                        bot_id: None,
+            });
 
         messages
     }
@@ -353,9 +355,11 @@ impl WatiChannel {
             channel: "wati".to_string(),
             timestamp,
             thread_ts: None,
-            interruption_scope_id: None,
+                parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        });
+                        bot_id: None,
+            });
 
         messages
     }

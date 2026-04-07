@@ -448,12 +448,17 @@ fn conversation_memory_key(msg: &traits::ChannelMessage) -> String {
 fn conversation_history_key(msg: &traits::ChannelMessage) -> String {
     // Include reply_target for per-channel isolation (e.g. distinct Discord/Slack
     // channels) and thread_ts for per-topic isolation in forum groups.
+    // Include bot_id for multi-bot isolation in group chats.
+    let bot_suffix = match &msg.bot_id {
+        Some(bot_id) => format!("_{}", bot_id),
+        None => String::new(),
+    };
     match &msg.thread_ts {
         Some(tid) => format!(
-            "{}_{}_{}_{}",
-            msg.channel, msg.reply_target, tid, msg.sender
+            "{}_{}_{}_{}{}",
+            msg.channel, msg.reply_target, tid, msg.sender, bot_suffix
         ),
-        None => format!("{}_{}_{}", msg.channel, msg.reply_target, msg.sender),
+        None => format!("{}_{}_{}{}", msg.channel, msg.reply_target, msg.sender, bot_suffix),
     }
 }
 
@@ -481,6 +486,26 @@ fn is_stop_command(content: &str) -> bool {
     let cmd = trimmed.split_whitespace().next().unwrap_or("");
     let base = cmd.split('@').next().unwrap_or(cmd);
     base.eq_ignore_ascii_case("/stop")
+}
+
+/// Build a SendMessage for replying to a channel message.
+/// Automatically includes:
+/// - Thread context (thread_ts) if present
+/// - Reply-to-message ID (parent_id) for quote/inline replies on platforms like Feishu
+fn build_reply_message(content: impl Into<String>, msg: &traits::ChannelMessage) -> traits::SendMessage {
+    let mut send_msg = traits::SendMessage::new(content, &msg.reply_target)
+        .in_thread(msg.thread_ts.clone());
+
+    // Add reply_to_message_id for quote/inline replies
+    // This enables the message to appear as a reply to the original message
+    if let Some(parent_id) = &msg.parent_id {
+        send_msg = send_msg.reply_to(Some(parent_id.clone()));
+    } else {
+        // If no parent_id, reply to the message itself (for quote-style replies)
+        send_msg = send_msg.reply_to(Some(msg.id.clone()));
+    }
+
+    send_msg
 }
 
 /// Strip tool-call XML tags from outgoing messages.

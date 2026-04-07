@@ -1169,9 +1169,11 @@ Allowlist Telegram username (without '@') or numeric user ID.",
                 .unwrap_or_default()
                 .as_secs(),
             thread_ts: thread_id,
-            interruption_scope_id: None,
+            parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        })
+                        bot_id: None,
+            })
     }
 
     /// Attempt to parse a Telegram update as a voice message and transcribe it.
@@ -1300,9 +1302,11 @@ Allowlist Telegram username (without '@') or numeric user ID.",
                 .unwrap_or_default()
                 .as_secs(),
             thread_ts: thread_id,
-            interruption_scope_id: None,
+            parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        })
+                        bot_id: None,
+            })
     }
 
     /// Extract sender username and display identity from a Telegram message object.
@@ -1505,9 +1509,11 @@ Allowlist Telegram username (without '@') or numeric user ID.",
                 .unwrap_or_default()
                 .as_secs(),
             thread_ts: thread_id,
-            interruption_scope_id: None,
+            parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        })
+                        bot_id: None,
+            })
     }
 
     /// Download a Telegram photo by file_id, resize to fit within 1024px, and return as base64 data URI.

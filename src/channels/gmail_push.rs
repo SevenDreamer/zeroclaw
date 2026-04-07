@@ -493,8 +493,10 @@ impl GmailPushChannel {
                         channel: "gmail_push".to_string(),
                         timestamp,
                         thread_ts: Some(gmail_msg.thread_id),
+                        parent_id: None,
                         interruption_scope_id: None,
                         attachments: Vec::new(),
+                        bot_id: None,
                     };
 
                     if tx.send(channel_msg).await.is_err() {

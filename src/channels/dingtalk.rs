@@ -289,9 +289,11 @@ impl Channel for DingTalkChannel {
                             .unwrap_or_default()
                             .as_secs(),
                         thread_ts: None,
+                parent_id: None,
                         interruption_scope_id: None,
                         attachments: vec![],
-                    };
+                                    bot_id: None,
+            };
 
                     if tx.send(channel_msg).await.is_err() {
                         tracing::warn!("DingTalk: message channel closed");

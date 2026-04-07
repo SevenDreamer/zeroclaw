@@ -252,8 +252,10 @@ impl BlueskyChannel {
             timestamp,
             thread_ts: Some(notif.uri.clone()),
             interruption_scope_id: None,
-            attachments: vec![],
-        })
+            parent_id: None,
+                        attachments: vec![],
+                        bot_id: None,
+            })
     }
 
     /// Mark notifications as read up to a given timestamp.

@@ -239,6 +239,7 @@ impl Channel for VoiceWakeChannel {
                                         thread_ts: None,
                                         interruption_scope_id: None,
                                         attachments: vec![],
+                        bot_id: None,
                                         observe_group: false,
                                     };
 

@@ -253,9 +253,11 @@ impl Channel for NostrChannel {
                             channel: "nostr".to_string(),
                             timestamp,
                             thread_ts: None,
+                parent_id: None,
                             interruption_scope_id: None,
                             attachments: vec![],
-                        };
+                                        bot_id: None,
+            };
                         if tx.send(msg).await.is_err() {
                             tracing::info!("Nostr listener: message bus closed, stopping");
                             break;

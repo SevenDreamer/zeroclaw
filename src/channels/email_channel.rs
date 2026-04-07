@@ -539,8 +539,10 @@ impl EmailChannel {
                 channel: "email".to_string(),
                 timestamp: email.timestamp,
                 thread_ts: None,
+                parent_id: None,
                 interruption_scope_id: None,
                 attachments: email.attachments,
+                bot_id: None,
             };
 
             if tx.send(msg).await.is_err() {

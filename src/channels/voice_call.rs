@@ -366,8 +366,10 @@ impl VoiceCallChannel {
             timestamp: chrono::Utc::now().timestamp().unsigned_abs(),
             thread_ts: Some(call_id.to_string()),
             interruption_scope_id: Some(call_id.to_string()),
-            attachments: vec![],
-        };
+            parent_id: None,
+                        attachments: vec![],
+                        bot_id: None,
+            };
         tx.send(msg)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to send call event: {e}"))?;

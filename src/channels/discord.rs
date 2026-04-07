@@ -1214,9 +1214,11 @@ impl Channel for DiscordChannel {
                             .unwrap_or_default()
                             .as_secs(),
                         thread_ts: None,
+                parent_id: None,
                         interruption_scope_id: None,
                     attachments: vec![],
-                    };
+                                    bot_id: None,
+            };
 
                     if tx.send(channel_msg).await.is_err() {
                         break;

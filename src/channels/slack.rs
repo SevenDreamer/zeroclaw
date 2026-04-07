@@ -2505,9 +2505,11 @@ impl SlackChannel {
                 .and_then(|m| m.get("thread_ts"))
                 .and_then(|v| v.as_str())
                 .map(str::to_string),
-            interruption_scope_id: None,
+            parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        })
+                        bot_id: None,
+            })
     }
 
     async fn open_socket_mode_url(&self) -> anyhow::Result<String> {
@@ -2738,9 +2740,11 @@ impl SlackChannel {
                                             .unwrap_or_default()
                                             .as_secs(),
                                         thread_ts,
+                                        parent_id: None,
                                         interruption_scope_id: scope_id,
                                         attachments: vec![],
-                                    };
+                                                    bot_id: None,
+            };
                                     tracing::info!(
                                         "Slack: :{cancel_emoji}: reaction from {user} \
                                          on {item_channel}/{item_ts} — sending /stop"
@@ -2835,9 +2839,11 @@ impl SlackChannel {
                     } else {
                         Self::inbound_thread_ts_genuine_only(event)
                     },
+                    parent_id: None,
                     interruption_scope_id: Self::inbound_interruption_scope_id(event, ts),
                     attachments: vec![],
-                };
+                                bot_id: None,
+            };
 
                 // Track thread context so start_typing can set assistant status.
                 if let Some(ref tts) = channel_msg.thread_ts {
@@ -3837,9 +3843,11 @@ impl Channel for SlackChannel {
                             } else {
                                 Self::inbound_thread_ts_genuine_only(msg)
                             },
+                            parent_id: None,
                             interruption_scope_id: Self::inbound_interruption_scope_id(msg, ts),
                             attachments: vec![],
-                        };
+                                        bot_id: None,
+            };
 
                         if tx.send(channel_msg).await.is_err() {
                             return Ok(());
@@ -3921,9 +3929,11 @@ impl Channel for SlackChannel {
                             .unwrap_or_default()
                             .as_secs(),
                         thread_ts: Some(thread_ts.clone()),
+                        parent_id: None,
                         interruption_scope_id: Some(thread_ts.clone()),
                         attachments: vec![],
-                    };
+                                    bot_id: None,
+            };
 
                     if tx.send(channel_msg).await.is_err() {
                         return Ok(());
@@ -4933,9 +4943,11 @@ mod tests {
             channel: "slack".into(),
             timestamp: 0,
             thread_ts: None, // thread_replies=false → no fallback to ts
-            interruption_scope_id: None,
+            parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        };
+                        bot_id: None,
+            };
 
         let msg1 = make_msg("100.000");
         let msg2 = make_msg("200.000");
@@ -4959,9 +4971,11 @@ mod tests {
             channel: "slack".into(),
             timestamp: 0,
             thread_ts: Some(ts.to_string()), // thread_replies=true → ts as thread_ts
-            interruption_scope_id: None,
+            parent_id: None,
+                interruption_scope_id: None,
             attachments: vec![],
-        };
+                        bot_id: None,
+            };
 
         let msg1 = make_msg("100.000");
         let msg2 = make_msg("200.000");

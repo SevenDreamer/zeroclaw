@@ -208,6 +208,13 @@ struct LarkMessage {
     content: String,
     #[serde(default)]
     mentions: Vec<serde_json::Value>,
+    /// Parent message ID (the message being replied to/quoted).
+    /// Set when this message is a reply to another message.
+    #[serde(default)]
+    parent_id: Option<String>,
+    /// Root message ID for thread context (if in a thread).
+    #[serde(default)]
+    root_id: Option<String>,
 }
 
 /// Heartbeat timeout for WS connection — must be larger than ping_interval (default 120 s).
@@ -562,6 +569,15 @@ impl LarkChannel {
 
     fn send_message_url(&self) -> String {
         format!("{}/im/v1/messages?receive_id_type=chat_id", self.api_base())
+    }
+
+    /// URL for replying to a specific message.
+    fn reply_message_url(&self, message_id: &str) -> String {
+        format!(
+            "{}/im/v1/messages/{}/reply?receive_id_type=chat_id",
+            self.api_base(),
+            message_id
+        )
     }
 
     fn message_reaction_url(&self, message_id: &str) -> String {
@@ -1017,7 +1033,7 @@ impl LarkChannel {
                     });
 
                     let channel_msg = ChannelMessage {
-                        id: Uuid::new_v4().to_string(),
+                        id: lark_msg.message_id.clone(),
                         sender: lark_msg.chat_id.clone(),
                         reply_target: lark_msg.chat_id.clone(),
                         content: text,
@@ -1026,9 +1042,11 @@ impl LarkChannel {
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_secs(),
-                        thread_ts: None,
+                        thread_ts: lark_msg.root_id.clone(),
+                        parent_id: lark_msg.parent_id.clone(),
                         interruption_scope_id: None,
                     attachments: vec![],
+                        bot_id: bot_open_id.clone(),
                     };
 
                     tracing::debug!("Lark WS: message in {}", lark_msg.chat_id);
@@ -1340,7 +1358,8 @@ impl LarkChannel {
     }
 
     async fn ensure_bot_open_id(&self) {
-        if !self.mention_only || self.resolved_bot_open_id().is_some() {
+        // Always try to resolve bot_open_id for session isolation
+        if self.resolved_bot_open_id().is_some() {
             return;
         }
 
@@ -1547,15 +1566,17 @@ impl LarkChannel {
             });
 
         vec![ChannelMessage {
-            id: Uuid::new_v4().to_string(),
+            id: message_id.to_string(),
             sender: chat_id.to_string(),
             reply_target: chat_id.to_string(),
             content: text,
             channel: self.channel_name().to_string(),
             timestamp,
             thread_ts: None,
+            parent_id: None,
             interruption_scope_id: None,
             attachments: vec![],
+            bot_id: self.resolved_bot_open_id(),
         }]
     }
 
@@ -1762,16 +1783,30 @@ impl LarkChannel {
             .and_then(|c| c.as_str())
             .unwrap_or(open_id);
 
+        // Extract parent_id for reply context
+        let parent_id = event
+            .pointer("/message/parent_id")
+            .and_then(|p| p.as_str())
+            .map(str::to_string);
+
+        let message_id = event
+            .pointer("/message/message_id")
+            .and_then(|m| m.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+
         messages.push(ChannelMessage {
-            id: Uuid::new_v4().to_string(),
+            id: message_id,
             sender: chat_id.to_string(),
             reply_target: chat_id.to_string(),
             content: text,
             channel: self.channel_name().to_string(),
             timestamp,
             thread_ts: None,
+            parent_id,
             interruption_scope_id: None,
             attachments: vec![],
+            bot_id: self.resolved_bot_open_id(),
         });
 
         messages
@@ -1786,31 +1821,72 @@ impl Channel for LarkChannel {
 
     async fn send(&self, message: &SendMessage) -> anyhow::Result<()> {
         let token = self.get_tenant_access_token().await?;
-        let url = self.send_message_url();
 
-        let chunks = split_markdown_chunks(&message.content, LARK_CARD_MARKDOWN_MAX_BYTES);
-        for chunk in &chunks {
-            let body = build_interactive_card_body(&message.recipient, chunk);
+        // Determine if this is a reply or a new message
+        let (url, body) = if let Some(reply_to_id) = &message.reply_to_message_id {
+            // Reply to a specific message
+            let url = self.reply_message_url(reply_to_id);
+            let chunks = split_markdown_chunks(&message.content, LARK_CARD_MARKDOWN_MAX_BYTES);
+            // For replies, we send the first chunk as the reply
+            let chunk = chunks.first().copied().unwrap_or(&message.content);
+            let mut body = build_interactive_card_body(&message.recipient, chunk);
+            // Add reply_in_thread if requested
+            if message.reply_in_thread {
+                body["reply_in_thread"] = serde_json::json!(true);
+            }
+            (url, body)
+        } else {
+            // Regular message
+            let url = self.send_message_url();
+            let chunks = split_markdown_chunks(&message.content, LARK_CARD_MARKDOWN_MAX_BYTES);
+            // For regular messages, we'll send all chunks
+            for (i, chunk) in chunks.iter().enumerate() {
+                let body = build_interactive_card_body(&message.recipient, chunk);
 
-            let (status, response) = self.send_text_once(&url, &token, &body).await?;
+                let (status, response) = self.send_text_once(&url, &token, &body).await?;
 
-            if should_refresh_lark_tenant_token(status, &response) {
-                // Token expired/invalid, invalidate and retry once.
-                self.invalidate_token().await;
-                let new_token = self.get_tenant_access_token().await?;
-                let (retry_status, retry_response) =
-                    self.send_text_once(&url, &new_token, &body).await?;
+                if should_refresh_lark_tenant_token(status, &response) {
+                    self.invalidate_token().await;
+                    let new_token = self.get_tenant_access_token().await?;
+                    let (retry_status, retry_response) =
+                        self.send_text_once(&url, &new_token, &body).await?;
 
-                if should_refresh_lark_tenant_token(retry_status, &retry_response) {
-                    anyhow::bail!(
-                        "Lark send failed after token refresh: status={retry_status}, body={retry_response}"
-                    );
+                    if should_refresh_lark_tenant_token(retry_status, &retry_response) {
+                        anyhow::bail!(
+                            "Lark send failed after token refresh: status={retry_status}, body={retry_response}"
+                        );
+                    }
+
+                    ensure_lark_send_success(retry_status, &retry_response, "after token refresh")?;
+                } else {
+                    ensure_lark_send_success(status, &response, "without token refresh")?;
                 }
 
-                ensure_lark_send_success(retry_status, &retry_response, "after token refresh")?;
-            } else {
-                ensure_lark_send_success(status, &response, "without token refresh")?;
+                // Log if we're sending multiple chunks
+                if chunks.len() > 1 {
+                    tracing::debug!("Lark: sent chunk {}/{}", i + 1, chunks.len());
+                }
             }
+            return Ok(());
+        };
+
+        // Send the reply (single message for now)
+        let (status, response) = self.send_text_once(&url, &token, &body).await?;
+
+        if should_refresh_lark_tenant_token(status, &response) {
+            self.invalidate_token().await;
+            let new_token = self.get_tenant_access_token().await?;
+            let (retry_status, retry_response) = self.send_text_once(&url, &new_token, &body).await?;
+
+            if should_refresh_lark_tenant_token(retry_status, &retry_response) {
+                anyhow::bail!(
+                    "Lark reply failed after token refresh: status={retry_status}, body={retry_response}"
+                );
+            }
+
+            ensure_lark_send_success(retry_status, &retry_response, "after token refresh")?;
+        } else {
+            ensure_lark_send_success(status, &response, "without token refresh")?;
         }
 
         Ok(())
